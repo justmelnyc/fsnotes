@@ -932,10 +932,6 @@ class ViewController: NSViewController,
         let filter = self.search.stringValue.lowercased()
         var sidebarName = getSidebarItem()?.name ?? ""
         
-        if let sidebarItem = getSidebarItem() {
-            sidebarName = sidebarItem.name
-        }
-        
         let selectedProject = getSidebarProject()
         let type = getSidebarType()
 

@@ -45,6 +45,12 @@
 		D735E5BD1F2EF66000173215 /* NoteCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D735E5BC1F2EF66000173215 /* NoteCellView.swift */; };
 		D735E5BF1F2F001500173215 /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D735E5BE1F2F001500173215 /* NoteRowView.swift */; };
 		D73673A820D10CF2000BA61D /* CloudDriveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D73673A720D10CF2000BA61D /* CloudDriveManager.swift */; };
+		D7391D2120FDBB60003BBC5A /* FileSystemEventManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2020FDBB60003BBC5A /* FileSystemEventManager.swift */; };
+		D7391D2320FDBB97003BBC5A /* ImageAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2220FDBB97003BBC5A /* ImageAttachment.swift */; };
+		D7391D2520FDBBBF003BBC5A /* SharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2420FDBBBF003BBC5A /* SharingService.swift */; };
+		D7391D2620FDBBC4003BBC5A /* SharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2420FDBBBF003BBC5A /* SharingService.swift */; };
+		D7391D2720FDBC85003BBC5A /* ImageAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2220FDBB97003BBC5A /* ImageAttachment.swift */; };
+		D7391D2820FDBC85003BBC5A /* FileSystemEventManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7391D2020FDBB60003BBC5A /* FileSystemEventManager.swift */; };
 		D739955E2051D1AB009017EE /* italic@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = D739955B2051D1AA009017EE /* italic@3x.png */; };
 		D739955F2051D1AB009017EE /* italic@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D739955C2051D1AA009017EE /* italic@2x.png */; };
 		D73995602051D1AB009017EE /* italic.png in Resources */ = {isa = PBXBuildFile; fileRef = D739955D2051D1AB009017EE /* italic.png */; };
@@ -310,6 +316,9 @@
 		D735E5BC1F2EF66000173215 /* NoteCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteCellView.swift; sourceTree = "<group>"; };
 		D735E5BE1F2F001500173215 /* NoteRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRowView.swift; sourceTree = "<group>"; };
 		D73673A720D10CF2000BA61D /* CloudDriveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveManager.swift; sourceTree = "<group>"; };
+		D7391D2020FDBB60003BBC5A /* FileSystemEventManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemEventManager.swift; sourceTree = "<group>"; };
+		D7391D2220FDBB97003BBC5A /* ImageAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAttachment.swift; sourceTree = "<group>"; };
+		D7391D2420FDBBBF003BBC5A /* SharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingService.swift; sourceTree = "<group>"; };
 		D739955B2051D1AA009017EE /* italic@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "italic@3x.png"; sourceTree = "<group>"; };
 		D739955C2051D1AA009017EE /* italic@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "italic@2x.png"; sourceTree = "<group>"; };
 		D739955D2051D1AB009017EE /* italic.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = italic.png; sourceTree = "<group>"; };
@@ -585,6 +594,7 @@
 				D7E6ACE820832D40003599A2 /* AppDelegate+URLRoutes.swift */,
 				D74112271FABA21B00AB619A /* MainWindow.swift */,
 				275592961F3AE9B5006B8988 /* MainWindowController.swift */,
+				D7391D2420FDBBBF003BBC5A /* SharingService.swift */,
 				D7793C741F211C6000CA39B7 /* ViewController.swift */,
 				D779C7BA1F415BE300FADEE1 /* PrefsWindowController.swift */,
 				D7508FCD1F3438540047AB76 /* PrefsViewController.swift */,
@@ -612,6 +622,7 @@
 				D708AC662000EF5800A1760F /* NoteType.swift */,
 				D78678CA2093AE10001A6620 /* UndoData.swift */,
 				D7B3391420DE0FB100B36460 /* TagList.swift */,
+				D7391D2220FDBB97003BBC5A /* ImageAttachment.swift */,
 				D7A65C5820F11C38003E5ADC /* LanguageType.swift */,
 			);
 			path = Business;
@@ -689,6 +700,7 @@
 		D7E6D9D520808652003ECAFC /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				D7391D2020FDBB60003BBC5A /* FileSystemEventManager.swift */,
 				D7DD5A871F88D4EA00CE947E /* FileWatcher.swift */,
 				D7DD5A891F88D50000CE947E /* FileWatcherEvent.swift */,
 				D777D7802009115C00D86B33 /* ImagesProcessor.swift */,
@@ -1222,6 +1234,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D7391D2720FDBC85003BBC5A /* ImageAttachment.swift in Sources */,
+				D7391D2820FDBC85003BBC5A /* FileSystemEventManager.swift in Sources */,
 				D7CB990B207E9F3500037E91 /* NSView+.swift in Sources */,
 				D7E6ACE920832D41003599A2 /* AppDelegate+URLRoutes.swift in Sources */,
 				D7475F552069245B00233126 /* DateFormatter+.swift in Sources */,
@@ -1240,6 +1254,7 @@
 				D7A65C5920F11C38003E5ADC /* LanguageType.swift in Sources */,
 				D7CB9905207E5AE300037E91 /* SidebarTableRowView.swift in Sources */,
 				D75EE7F72078B22D0055F159 /* SidebarItem.swift in Sources */,
+				D7391D2620FDBBC4003BBC5A /* SharingService.swift in Sources */,
 				D783B505208A1BFD00328A41 /* EditorSplitView.swift in Sources */,
 				D75EE8002078E0C60055F159 /* SidebarItemType.swift in Sources */,
 				D7793C731F211C6000CA39B7 /* AppDelegate.swift in Sources */,
@@ -1275,6 +1290,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D7391D2520FDBBBF003BBC5A /* SharingService.swift in Sources */,
+				D7391D2320FDBB97003BBC5A /* ImageAttachment.swift in Sources */,
+				D7391D2120FDBB60003BBC5A /* FileSystemEventManager.swift in Sources */,
 				D7ADFD0F2064285900B531F9 /* URL+.swift in Sources */,
 				D7E6ACEA20832D41003599A2 /* AppDelegate+URLRoutes.swift in Sources */,
 				D7CB990C207E9F3500037E91 /* NSView+.swift in Sources */,

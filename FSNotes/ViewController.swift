@@ -17,19 +17,19 @@ class ViewController: NSViewController,
     NSOutlineViewDataSource {
 
     // MARK: - Properties
-    let storage = Storage.sharedInstance()
-
-    private var filewatcher: FileWatcher?
-    var filteredNoteList: [Note]?
-    var alert: NSAlert?
-    var refilled: Bool = false
-    var timer = Timer()
-    var sidebarTimer = Timer()
-
+    
+    public let storage = Storage.sharedInstance()
+    public var fsManager: FileSystemEventManager?
+    public var filteredNoteList: [Note]?
+    public var alert: NSAlert?
+    public var refilled: Bool = false
+    public var timer = Timer()
+    public var sidebarTimer = Timer()
+    
     override var representedObject: Any? {
         didSet { }  // Update the view, if already loaded.
     }
-
+    
     // MARK: - IBOutlets
     @IBOutlet var emptyEditAreaImage: NSImageView!
     @IBOutlet weak var splitView: NSSplitView!
@@ -45,7 +45,8 @@ class ViewController: NSViewController,
     @IBOutlet weak var searchTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var sortByOutlet: NSMenuItem!
-
+    @IBOutlet weak var shareButton: NSButton!
+    
     // MARK: - Overrides
     override func viewDidAppear() {
         self.view.window!.title = "FSNotes"
@@ -55,17 +56,22 @@ class ViewController: NSViewController,
             sidebarSplitView.subviews[1].viewBackgroundColor = NSColor.white
         }
         
-        // editarea paddings
         editArea.textContainerInset.height = 0
         editArea.textContainerInset.width = 5
         editArea.isEditable = false
         editArea.backgroundColor = UserDefaultsManagement.bgColor
         editArea.layoutManager?.defaultAttachmentScaling = .scaleProportionallyDown
         
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = CGFloat(UserDefaultsManagement.editorLineSpacing)
+        editArea.defaultParagraphStyle = paragraphStyle
+        editArea.typingAttributes[.paragraphStyle] = paragraphStyle
+        
         if (UserDefaultsManagement.horizontalOrientation) {
-            //titleLabel.isHidden = true
             self.splitView.isVertical = false
         }
+        
+        shareButton.sendAction(on: .leftMouseDown)
         
         setTableRowHeight()
         
@@ -91,7 +97,7 @@ class ViewController: NSViewController,
         if storage.noteList.count == 0 {
             storage.loadDocuments()
         }
-    
+        
         // Init sidebar items
         let sidebar = Sidebar()
         self.storageOutlineView.sidebarItems = sidebar.getList()
@@ -103,12 +109,12 @@ class ViewController: NSViewController,
             }
         }
         
-        // Watch FS changes
-        startFileWatcher()
+        self.fsManager = FileSystemEventManager(storage: storage, delegate: self)
+        self.fsManager?.start()
         
         let font = UserDefaultsManagement.noteFont
         editArea.font = font
-        
+        
         // Global shortcuts monitoring
         MASShortcutMonitor.shared().register(UserDefaultsManagement.newNoteShortcut, withAction: {
             self.makeNoteShortcut()
@@ -127,12 +133,12 @@ class ViewController: NSViewController,
             self.keyDown(with: $0)
             return $0
         }
-                
+        
         loadMoveMenu()
         loadSortBySetting()
         
         #if CLOUDKIT
-            keyValueWatcher()
+        keyValueWatcher()
         #endif
     }
     
@@ -144,8 +150,8 @@ class ViewController: NSViewController,
             case "fsnotesMenu":
                 if menuItem.identifier?.rawValue == "emptyTrashMenu" {
                     menuItem.keyEquivalentModifierMask = UserDefaultsManagement.focusInEditorOnNoteSelect
-                            ? [.command, .option, .shift]
-                            : [.command, .shift]
+                        ? [.command, .option, .shift]
+                        : [.command, .shift]
                     return true
                 }
             case "fileMenu":
@@ -156,8 +162,8 @@ class ViewController: NSViewController,
                     
                     menuItem.keyEquivalentModifierMask =
                         UserDefaultsManagement.focusInEditorOnNoteSelect
-                            ? [.command, .option]
-                            : [.command]
+                        ? [.command, .option]
+                        : [.command]
                 }
                 
                 if ["fileMenu.new", "fileMenu.newRtf", "fileMenu.searchAndCreate"].contains(menuItem.identifier?.rawValue) {
@@ -183,13 +189,13 @@ class ViewController: NSViewController,
         
         return true
     }
-
+    
     @IBAction func searchAndCreate(_ sender: Any) {
         let vc = NSApplication.shared.windows.first!.contentViewController as! ViewController
         
         vc.search.becomeFirstResponder()
     }
-
+    
     @IBAction func sortBy(_ sender: NSMenuItem) {
         if let id = sender.identifier, let sortBy = SortBy(rawValue: id.rawValue) {
             UserDefaultsManagement.sort = sortBy
@@ -242,15 +248,15 @@ class ViewController: NSViewController,
         editArea.clear()
         updateTable()
     }
-        
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {        
+    
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
         return sidebarSplitView.frame.width / 5
     }
     
     func splitViewDidResizeSubviews(_ notification: Notification) {
         let vc = NSApplication.shared.windows.first!.contentViewController as! ViewController
         vc.checkSidebarConstraint()
-                
+        
         if !refilled {
             self.refilled = true
             DispatchQueue.main.async() {
@@ -260,147 +266,10 @@ class ViewController: NSViewController,
         }
     }
     
-    private func startFileWatcher() {
-        let paths = storage.getProjectPaths()
-        
-        filewatcher = FileWatcher(paths)
-        filewatcher?.callback = { event in
-            if UserDataService.instance.fsUpdatesDisabled {
-                return
-            }
-            
-            guard let path = event.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-                return
-            }
-            
-            guard let url = URL(string: "file://" + path) else {
-                return
-            }
-            
-            if event.fileRemoved {
-                guard let note = self.storage.getBy(url: url), let project = note.project, project.isTrash else { return }
-                
-                self.storage.removeNotes(notes: [note], fsRemove: false) { _ in
-                    DispatchQueue.main.async {
-                        if self.notesTableView.numberOfRows > 0 {
-                            self.notesTableView.removeByNotes(notes: [note])
-                        }
-                    }
-                }
-            }
-            
-            if event.fileRenamed {
-                let note = self.storage.getBy(url: url)
-                let fileExistInFS = self.checkFile(url: url, pathList: paths)
-                
-                if note != nil {
-                    if fileExistInFS {
-                        self.watcherCreateTrigger(url)
-                    } else {
-                        guard let unwrappedNote = note else {
-                            return
-                        }
-                        
-                        print("FSWatcher remove note: \"\(unwrappedNote.name)\"")
-                        
-                        self.storage.removeNotes(notes: [unwrappedNote], fsRemove: false) { _ in
-                            DispatchQueue.main.async {
-                                self.notesTableView.removeByNotes(notes: [unwrappedNote])
-                            }
-                        }
-                    }
-                } else if fileExistInFS {
-                    self.watcherCreateTrigger(url)
-                }
-                
-                return
-            }
-            
-            guard self.checkFile(url: url, pathList: paths) else {
-                return
-            }
-            
-            if event.fileChange {
-                let wrappedNote = self.storage.getBy(url: url)
-                
-                if let note = wrappedNote, note.reload() {
-                    note.markdownCache()
-                    self.refillEditArea()
-                } else {
-                    self.watcherCreateTrigger(url)
-                }
-                return
-            }
-            
-            if event.fileCreated {
-                self.watcherCreateTrigger(url)
-            }
-        }
-        
-        filewatcher?.start()
-    }
     
-    public func restartFileWatcher() {
-        filewatcher?.stop()
-        startFileWatcher()
-    }
-
-    func watcherCreateTrigger(_ url: URL) {
-        let n = storage.getBy(url: url)
-        
-        guard n == nil else {
-            if let nUnwrapped = n, nUnwrapped.url == UserDataService.instance.lastRenamed {
-                self.updateTable() {
-                    self.notesTableView.setSelected(note: nUnwrapped)
-                    UserDataService.instance.lastRenamed = nil
-                }
-            }
-            return
-        }
-        
-        guard storage.getProjectBy(url: url) != nil else {
-            return
-        }
-        
-        let note = Note(url: url)
-        note.parseURL()
-        note.load(url)
-        note.loadModifiedLocalAt()
-        note.markdownCache()
-        refillEditArea()
-        
-        print("FSWatcher import note: \"\(note.name)\"")
-        storage.add(note)
-        
-        DispatchQueue.main.async {
-            if let url = UserDataService.instance.lastRenamed,
-                let note = self.storage.getBy(url: url) {
-                self.updateTable() {
-                    self.notesTableView.setSelected(note: note)
-                    UserDataService.instance.lastRenamed = nil
-                }
-            } else {
-                self.reloadView(note: note)
-            }
-        }
-        
-        if note.name == "FSNotes - Readme.md" {
-            updateTable() {
-                self.notesTableView.selectRow(0)
-                note.addPin()
-            }
-        }
-        
+    public func reloadSideBar() {
         sidebarTimer.invalidate()
         sidebarTimer = Timer.scheduledTimer(timeInterval: 1.2, target: storageOutlineView, selector: #selector(storageOutlineView.reloadSidebar), userInfo: nil, repeats: false)
-    }
-    
-    func checkFile(url: URL, pathList: [String]) -> Bool {
-        return (
-            FileManager.default.fileExists(atPath: url.path)
-            && storage.allowedExtensions.contains(url.pathExtension)
-            && pathList.contains(url.deletingLastPathComponent().path)
-        )
     }
     
     func reloadView(note: Note? = nil) {
@@ -427,7 +296,7 @@ class ViewController: NSViewController,
         
         DispatchQueue.main.async {
             var location: Int = 0
-        
+            
             if let unwrappedCursor = cursor {
                 location = unwrappedCursor
             } else {
@@ -443,7 +312,7 @@ class ViewController: NSViewController,
             }
         }
     }
-        
+    
     override func keyDown(with event: NSEvent) {
         
         // Control + Tab
@@ -464,76 +333,76 @@ class ViewController: NSViewController,
             updateTable()
         }
         
-        // Focus search field shortcut (cmd-L)
+        // Focus search field shortcut (⌘-L)
         if (event.keyCode == kVK_ANSI_L && event.modifierFlags.contains(.command)) {
             search.becomeFirstResponder()
         }
         
-        // Note edit mode and select file name (cmd-r)
+        // Note edit mode and select file name (⌘-r)
         if (
             event.keyCode == kVK_ANSI_R
-            && event.modifierFlags.contains(.command)
-            && !event.modifierFlags.contains(.shift)
-        ) {
+                && event.modifierFlags.contains(.command)
+                && !event.modifierFlags.contains(.shift)
+            ) {
             renameNote(selectedRow: notesTableView.selectedRow)
         }
         
         // Make note shortcut (cmd-n)
         if (
             event.keyCode == kVK_ANSI_N
-            && event.modifierFlags.contains(.command)
-            && !event.modifierFlags.contains(.shift)
-        ) {
+                && event.modifierFlags.contains(.command)
+                && !event.modifierFlags.contains(.shift)
+            ) {
             makeNote(SearchTextField())
         }
         
-        // Make note shortcut (cmd-n)
+        // Make note shortcut (⌘-n)
         if (
             event.keyCode == kVK_ANSI_N
-            && event.modifierFlags.contains(.command)
-            && event.modifierFlags.contains(.shift)
-        ) {
+                && event.modifierFlags.contains(.command)
+                && event.modifierFlags.contains(.shift)
+            ) {
             fileMenuNewRTF(NSTextField())
         }
         
-        // Pin note shortcut (cmd-8)
+        // Pin note shortcut (⌘-8)
         if (event.keyCode == kVK_ANSI_8 && event.modifierFlags.contains(.command)) {
             pin(notesTableView.selectedRowIndexes)
         }
         
-        // Next note (cmd-j)
+        // Next note (⌘-j)
         if (
             event.keyCode == kVK_ANSI_J
-            && event.modifierFlags.contains([.command])
-            && !event.modifierFlags.contains(.option)
-        ) {
+                && event.modifierFlags.contains([.command])
+                && !event.modifierFlags.contains(.option)
+            ) {
             notesTableView.selectNext()
         }
         
-        // Prev note (cmd-k)
+        // Prev note (⌘-k)
         if (event.keyCode == kVK_ANSI_K && event.modifierFlags.contains(.command)) {
             notesTableView.selectPrev()
         }
-                
-        // Open in external editor (cmd-control-e)
+        
+        // Open in external editor (⌘-control-e)
         if (
             event.keyCode == kVK_ANSI_E
-            && event.modifierFlags.contains(.command)
-            && event.modifierFlags.contains(.control)
-        ) {
+                && event.modifierFlags.contains(.command)
+                && event.modifierFlags.contains(.control)
+            ) {
             external(selectedRow: notesTableView.selectedRow)
         }
         
-        // Open in finder (cmd-shift-r)
+        // Open in finder (⌘-shift-r)
         if (
             event.keyCode == kVK_ANSI_R
-            && event.modifierFlags.contains(.command)
-            && event.modifierFlags.contains(.shift)
-        ) {
+                && event.modifierFlags.contains(.command)
+                && event.modifierFlags.contains(.shift)
+            ) {
             finder(selectedRow: notesTableView.selectedRow)
         }
         
-        // Toggle sidebar cmd+shift+control+b
+        // Toggle sidebar ⌘+shift+control+b
         if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) && event.modifierFlags.contains(.control) && event.keyCode == kVK_ANSI_B {
             toggleSidebar("")
         }
@@ -670,7 +539,7 @@ class ViewController: NSViewController,
         guard let vc = NSApp.windows[0].contentViewController as? ViewController else { return }
         vc.renameNote(selectedRow: vc.notesTableView.clickedRow)
     }
-        
+    
     @IBAction func deleteNote(_ sender: Any) {
         guard let vc = NSApp.windows[0].contentViewController as? ViewController else { return }
         guard let notes = vc.notesTableView.getSelectedNotes() else {
@@ -748,7 +617,7 @@ class ViewController: NSViewController,
             move(notes: notes, project: project)
         }
     }
-
+    
     @IBAction func tagNote(_ sender: Any) {
         guard let vc = NSApp.windows[0].contentViewController as? ViewController else { return }
         guard let notes = vc.notesTableView.getSelectedNotes() else { return }
@@ -806,7 +675,7 @@ class ViewController: NSViewController,
             vc.splitView.subviews[0].isHidden = true
             return
         }
-
+        
         vc.splitView.subviews[0].isHidden = false
         UserDefaultsManagement.hideSidebar = false
     }
@@ -874,19 +743,20 @@ class ViewController: NSViewController,
     func textDidChange(_ notification: Notification) {
         timer.invalidate()
         timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(enableFSUpdates), userInfo: nil, repeats: false)
-
+        
         UserDataService.instance.fsUpdatesDisabled = true
         let selected = notesTableView.selectedRow
         
         if (
             notesTableView.noteList.indices.contains(selected)
-            && selected > -1
-            && !UserDefaultsManagement.preview
-        ) {
+                && selected > -1
+                && !UserDefaultsManagement.preview
+            ) {
             editArea.removeHighlight()
             let note = notesTableView.noteList[selected]
+            
             note.content = NSMutableAttributedString(attributedString: editArea.attributedString())
-            note.save()
+            note.save(needImageUnLoad: true)
             storage.add(note)
             
             if UserDefaultsManagement.sort == .ModificationDate && UserDefaultsManagement.sortDirection == true {
@@ -921,7 +791,7 @@ class ViewController: NSViewController,
     
     func getSidebarItem() -> SidebarItem? {
         if let sidebarItem = storageOutlineView.item(atRow: storageOutlineView.selectedRow) as? SidebarItem {
-        
+            
             return sidebarItem
         }
         
@@ -934,7 +804,7 @@ class ViewController: NSViewController,
         
         let selectedProject = getSidebarProject()
         let type = getSidebarType()
-
+        
         let terms = filter.split(separator: " ")
         let source = storage.noteList
         
@@ -1064,7 +934,7 @@ class ViewController: NSViewController,
         let isPinned = notesTableView.noteList[id].isPinned
         let position = isPinned ? 0 : countVisiblePinned()
         let note = notesTableView.noteList.remove(at: id)
-
+        
         notesTableView.noteList.insert(note, at: position)
         notesTableView.moveRow(at: id, to: position)
         notesTableView.reloadData(forRowIndexes: [id, position], columnIndexes: [0])
@@ -1082,7 +952,7 @@ class ViewController: NSViewController,
         guard let project = sidebarProject else {
             return
         }
-                
+        
         disablePreview()
         editArea.string = content
         
@@ -1140,7 +1010,7 @@ class ViewController: NSViewController,
         
         updateTable()
     }
-        
+    
     func renameNote(selectedRow: Int) {
         if (!notesTableView.noteList.indices.contains(selectedRow)) {
             return
@@ -1186,6 +1056,9 @@ class ViewController: NSViewController,
     }
     
     func enablePreview() {
+        let vc = NSApplication.shared.windows.first!.contentViewController as! ViewController
+        vc.editArea.window?.makeFirstResponder(vc.notesTableView)
+        
         self.view.window!.title = NSLocalizedString("FSNotes [preview]", comment: "")
         UserDefaultsManagement.preview = true
         refillEditArea()
@@ -1237,7 +1110,7 @@ class ViewController: NSViewController,
             moveMenu.addItem(trashMenu)
             moveMenu.addItem(NSMenuItem.separator())
         }
-                
+        
         let projects = storage.getProjects()
         for item in projects {
             if project == item || item.isTrash || item.isArchive {
@@ -1253,7 +1126,7 @@ class ViewController: NSViewController,
         
         noteMenu.setSubmenu(moveMenu, for: moveMenuItem)
     }
-
+    
     func loadSortBySetting() {
         let viewLabel = NSLocalizedString("View", comment: "Menu")
         let sortByLabel = NSLocalizedString("Sort By", comment: "View menu")
@@ -1264,7 +1137,7 @@ class ViewController: NSViewController,
             let submenu = view.submenu,
             let sortMenu = submenu.item(withTitle: sortByLabel),
             let sortItems = sortMenu.submenu else {
-            return
+                return
         }
         
         let sort = UserDefaultsManagement.sort
@@ -1326,7 +1199,7 @@ class ViewController: NSViewController,
     
     @IBAction func copyURL(_ sender: Any) {
         if let note = notesTableView.getSelectedNote(), let title = note.title.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) {
-
+            
             let name = "fsnotes://find/\(title)"
             let pasteboard = NSPasteboard.general
             pasteboard.declareTypes([NSPasteboard.PasteboardType.string], owner: nil)
@@ -1334,11 +1207,37 @@ class ViewController: NSViewController,
             
             let notification = NSUserNotification()
             notification.title = "FSNotes"
-            notification.informativeText = NSLocalizedString("URL has been copied to clipboard", comment: "") 
+            notification.informativeText = NSLocalizedString("URL has been copied to clipboard", comment: "")
             notification.soundName = NSUserNotificationDefaultSoundName
             NSUserNotificationCenter.default.deliver(notification)
         }
     }
     
+    //MARK: Share Service
+    
+    @IBAction func shareSheet(_ sender: NSButton) {
+        if let note = notesTableView.getSelectedNote() {
+            let sharingPicker = NSSharingServicePicker(items: [note.content])
+            sharingPicker.delegate = self
+            sharingPicker.show(relativeTo: NSZeroRect, of: sender, preferredEdge: .minY)
+        }
+    }
+    
+    public func saveTextAtClipboard() {
+        if let note = notesTableView.getSelectedNote() {
+            let pasteboard = NSPasteboard.general
+            pasteboard.declareTypes([NSPasteboard.PasteboardType.string], owner: nil)
+            pasteboard.setString(note.content.string, forType: NSPasteboard.PasteboardType.string)
+        }
+    }
+    
+    public func saveHtmlAtClipboard() {
+        if let note = notesTableView.getSelectedNote() {
+            guard let render = try? note.content.string.toHTML() else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.declareTypes([NSPasteboard.PasteboardType.string], owner: nil)
+            pasteboard.setString(render, forType: NSPasteboard.PasteboardType.string)
+        }
+    }
+    
 }
-
